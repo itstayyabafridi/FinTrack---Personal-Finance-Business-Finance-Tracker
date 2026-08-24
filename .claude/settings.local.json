@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm run:*)",
+      "Bash(pnpm add:*)",
+      "Bash(taskkill:*)",
+      "Bash(tskill 19824:*)",
+      "Bash(pnpm dev:*)"
+    ]
+  }
+}
