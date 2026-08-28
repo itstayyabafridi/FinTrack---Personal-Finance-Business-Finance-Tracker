@@ -143,8 +143,14 @@ export function UserProfileMenu({ position = "top-right", trigger }: UserProfile
   );
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
-      {trigger || defaultTrigger}
+    <div style={{ position: "relative", display: trigger ? "block" : "inline-block", width: trigger ? "100%" : "auto" }}>
+      {trigger ? (
+        <div ref={triggerRef as any} onClick={() => setOpen(!open)} style={{ width: "100%" }}>
+          {trigger}
+        </div>
+      ) : (
+        defaultTrigger
+      )}
       {open && DropdownContent}
     </div>
   );

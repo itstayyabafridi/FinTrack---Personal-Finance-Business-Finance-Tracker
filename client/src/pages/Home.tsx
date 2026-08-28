@@ -29,6 +29,7 @@ import { useAppLayout } from "@/components/layout/AppLayout";
 import { useFinancialData } from "@/contexts/FinancialDataContext";
 import { LedgerIllustration } from "@/components/LedgerIllustration";
 import { GoogleSheetSyncBanner } from "@/components/google-sheets/GoogleSheetSyncBanner";
+import { BudgetTrackerSection } from "@/components/BudgetTrackerSection";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -144,6 +145,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Monthly & Weekly Budget + Auto-Cut + Profit/Loss Engine */}
+      <BudgetTrackerSection />
 
       {/* 6 Metric Grid */}
       <section className="metric-grid">

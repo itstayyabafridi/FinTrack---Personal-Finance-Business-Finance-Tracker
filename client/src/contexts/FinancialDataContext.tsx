@@ -210,6 +210,37 @@ export interface NewProductReturnInput {
   notes?: string;
 }
 
+// Budget Configuration and Analytics Types
+export interface BudgetConfig {
+  monthlyBudget: number;
+  weeklyBudget: number;
+}
+
+export interface PeriodBudgetAnalytics {
+  period: "month" | "week";
+  title: string;
+  startDateStr: string;
+  endDateStr: string;
+  budget: number;
+  spent: number;
+  remaining: number;
+  percentUsed: number;
+  isOverBudget: boolean;
+  overBudgetAmount: number;
+  income: number;
+  netProfit: number;
+  profitMargin: number;
+  isProfit: boolean;
+  transactionCount: number;
+  expenseCount: number;
+  incomeCount: number;
+  expenses: Transaction[];
+  incomeTransactions: Transaction[];
+  daysRemaining: number;
+  suggestedDailySpend: number;
+  dailySpending: { date: string; dayLabel: string; spent: number; income: number }[];
+}
+
 // Full Context Type
 export interface FinancialDataContextType {
   // Core Entities
@@ -221,6 +252,14 @@ export interface FinancialDataContextType {
   loans: Loan[];
   ownerPayments: OwnerPayment[];
   owners: Owner[];
+
+  // Monthly & Weekly Budget & Profit/Loss Features
+  monthlyBudget: number;
+  weeklyBudget: number;
+  setMonthlyBudget: (amount: number) => void;
+  setWeeklyBudget: (amount: number) => void;
+  monthlyAnalytics: PeriodBudgetAnalytics;
+  weeklyAnalytics: PeriodBudgetAnalytics;
 
   // Sales & Business Entities
   products: Product[];
@@ -345,6 +384,7 @@ const STORAGE_KEYS = {
   INVENTORY_MOVEMENTS: "fintrack_inventory_movements_v2",
   AD_CAMPAIGNS: "fintrack_ad_campaigns_v2",
   PRODUCT_RETURNS: "fintrack_product_returns_v2",
+  BUDGET_CONFIG: "fintrack_budget_config_v2",
 };
 
 // Initial Seed Data for Sales & Business
@@ -837,14 +877,140 @@ const INITIAL_INVENTORY_MOVEMENTS: InventoryMovement[] = [
 const FinancialDataContext = createContext<FinancialDataContextType | null>(null);
 
 export function FinancialDataProvider({ children }: { children: ReactNode }) {
+  // Budget State (Monthly e.g. 100k, Weekly e.g. 25k)
+  const [budgetConfig, setBudgetConfig] = useState<BudgetConfig>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.BUDGET_CONFIG);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          monthlyBudget: typeof parsed.monthlyBudget === "number" && parsed.monthlyBudget >= 0 ? parsed.monthlyBudget : 100000,
+          weeklyBudget: typeof parsed.weeklyBudget === "number" && parsed.weeklyBudget >= 0 ? parsed.weeklyBudget : 25000,
+        };
+      }
+    } catch {}
+    return { monthlyBudget: 100000, weeklyBudget: 25000 };
+  });
+
+  const setMonthlyBudget = (amount: number) => {
+    const valid = Math.max(0, Number(amount) || 0);
+    setBudgetConfig((prev) => {
+      const next = { ...prev, monthlyBudget: valid };
+      try {
+        localStorage.setItem(STORAGE_KEYS.BUDGET_CONFIG, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const setWeeklyBudget = (amount: number) => {
+    const valid = Math.max(0, Number(amount) || 0);
+    setBudgetConfig((prev) => {
+      const next = { ...prev, weeklyBudget: valid };
+      try {
+        localStorage.setItem(STORAGE_KEYS.BUDGET_CONFIG, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
   // Core Entities State
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    return [
+      {
+        id: "tx_seed_1",
+        user_id: "user_current",
+        workspace_id: "workspace_1",
+        type: "income",
+        amount: 85000,
+        description: "Client Milestone Retainer Payment",
+        category: "Client Retainer",
+        date: twoDaysAgo,
+        payment_method: "Bank Transfer",
+        notes: "Milestone 2 cleared via Bank Transfer",
+        reference_id: null,
+        reference_type: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "tx_seed_2",
+        user_id: "user_current",
+        workspace_id: "workspace_1",
+        type: "expense",
+        amount: 14500,
+        description: "Office Utilities & Internet Connection",
+        category: "Office & Rent",
+        date: todayStr,
+        payment_method: "Bank Transfer",
+        notes: "Monthly utility and connectivity bill",
+        reference_id: null,
+        reference_type: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "tx_seed_3",
+        user_id: "user_current",
+        workspace_id: "workspace_1",
+        type: "expense",
+        amount: 8200,
+        description: "Cloud Hosting & Development Tools",
+        category: "Software & IT",
+        date: twoDaysAgo,
+        payment_method: "Credit Card",
+        notes: "Cloud servers & tooling renewal",
+        reference_id: null,
+        reference_type: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "tx_seed_4",
+        user_id: "user_current",
+        workspace_id: "workspace_1",
+        type: "product_sale",
+        amount: 42000,
+        description: "E-Commerce Product Order Settlement",
+        category: "E-Commerce",
+        date: fourDaysAgo,
+        payment_method: "Cash on Delivery",
+        notes: "Customer shipments fulfilled",
+        reference_id: null,
+        reference_type: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "tx_seed_5",
+        user_id: "user_current",
+        workspace_id: "workspace_1",
+        type: "ad_spend",
+        amount: 9800,
+        description: "Meta & TikTok Growth Ad Campaign",
+        category: "Marketing & Ads",
+        date: fourDaysAgo,
+        payment_method: "Credit Card",
+        notes: "Performance marketing campaign",
+        reference_id: null,
+        reference_type: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
   });
 
   const [students, setStudents] = useState<Student[]>(() => {
@@ -1200,6 +1366,203 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
       profit: val.income - val.expenses,
     }));
   }, [transactions, orders]);
+
+  // Dynamic Monthly Budget & Profit/Loss Analytics
+  const monthlyAnalytics: PeriodBudgetAnalytics = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const endOfMonth = new Date(year, month + 1, 0);
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(endOfMonth.getDate()).padStart(2, "0")}`;
+    const daysInMonth = endOfMonth.getDate();
+    const currentDay = now.getDate();
+    const daysRemaining = Math.max(1, daysInMonth - currentDay);
+
+    const monthName = now.toLocaleString("default", { month: "long" });
+    const title = `${monthName} ${year}`;
+
+    const expenseTypes = ["expense", "ad_spend", "shipping_cost", "platform_fee", "product_refund", "owner_payment"];
+    const incomeTypes = ["income", "other_income", "student_fee", "client_payment", "product_sale"];
+
+    const monthTxs = transactions.filter((t) => {
+      if (!t.date) return false;
+      const d = t.date.split("T")[0];
+      return d >= startStr && d <= endStr;
+    });
+
+    const monthExpenses = monthTxs.filter((t) => expenseTypes.includes(t.type));
+    const monthIncomes = monthTxs.filter((t) => incomeTypes.includes(t.type));
+
+    // Auto-cut from budget: sum of all expense transactions
+    let spent = monthExpenses.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    orders.forEach((o) => {
+      if (!o.transaction_id && o.payment_status === "paid" && o.order_date >= startStr && o.order_date <= endStr) {
+        const orderCost = Number(o.total_cogs || 0) + Number(o.shipping_cost || 0) + Number(o.platform_fee || 0);
+        spent += orderCost;
+      }
+    });
+
+    // Total monthly inflow
+    let income = monthIncomes.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    orders.forEach((o) => {
+      if (!o.transaction_id && o.payment_status === "paid" && o.order_date >= startStr && o.order_date <= endStr) {
+        income += Number(o.total_revenue || 0);
+      }
+    });
+
+    const budget = budgetConfig.monthlyBudget;
+    const remaining = budget - spent;
+    const percentUsed = budget > 0 ? Math.min(100, Math.max(0, Math.round((spent / budget) * 1000) / 10)) : 0;
+    const isOverBudget = spent > budget;
+    const overBudgetAmount = Math.max(0, spent - budget);
+    const netProfit = income - spent;
+    const profitMargin = income > 0 ? Math.round((netProfit / income) * 1000) / 10 : 0;
+    const isProfit = netProfit >= 0;
+    const suggestedDailySpend = remaining > 0 ? Math.round(remaining / daysRemaining) : 0;
+
+    // Daily breakdown for visual chart & trends
+    const dailyMap: Record<string, { spent: number; income: number }> = {};
+    for (let day = 1; day <= currentDay; day++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      dailyMap[dStr] = { spent: 0, income: 0 };
+    }
+    monthExpenses.forEach((t) => {
+      const d = t.date.split("T")[0];
+      if (dailyMap[d]) dailyMap[d].spent += Number(t.amount) || 0;
+    });
+    monthIncomes.forEach((t) => {
+      const d = t.date.split("T")[0];
+      if (dailyMap[d]) dailyMap[d].income += Number(t.amount) || 0;
+    });
+
+    const dailySpending = Object.entries(dailyMap).map(([dStr, val]) => ({
+      date: dStr,
+      dayLabel: String(parseInt(dStr.split("-")[2], 10)),
+      spent: val.spent,
+      income: val.income,
+    }));
+
+    return {
+      period: "month",
+      title,
+      startDateStr: startStr,
+      endDateStr: endStr,
+      budget,
+      spent,
+      remaining,
+      percentUsed,
+      isOverBudget,
+      overBudgetAmount,
+      income,
+      netProfit,
+      profitMargin,
+      isProfit,
+      transactionCount: monthTxs.length,
+      expenseCount: monthExpenses.length,
+      incomeCount: monthIncomes.length,
+      expenses: monthExpenses,
+      incomeTransactions: monthIncomes,
+      daysRemaining,
+      suggestedDailySpend,
+      dailySpending,
+    };
+  }, [transactions, orders, budgetConfig.monthlyBudget]);
+
+  // Dynamic Weekly Budget & Profit/Loss Analytics
+  const weeklyAnalytics: PeriodBudgetAnalytics = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diffToMonday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const startStr = monday.toISOString().split("T")[0];
+    const endStr = sunday.toISOString().split("T")[0];
+    const daysRemaining = Math.max(1, 7 - diffToMonday);
+
+    const title = `Week of ${monday.toLocaleDateString("default", { month: "short", day: "numeric" })} - ${sunday.toLocaleDateString("default", { month: "short", day: "numeric" })}`;
+
+    const expenseTypes = ["expense", "ad_spend", "shipping_cost", "platform_fee", "product_refund", "owner_payment"];
+    const incomeTypes = ["income", "other_income", "student_fee", "client_payment", "product_sale"];
+
+    const weekTxs = transactions.filter((t) => {
+      if (!t.date) return false;
+      const d = t.date.split("T")[0];
+      return d >= startStr && d <= endStr;
+    });
+
+    const weekExpenses = weekTxs.filter((t) => expenseTypes.includes(t.type));
+    const weekIncomes = weekTxs.filter((t) => incomeTypes.includes(t.type));
+
+    let spent = weekExpenses.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    orders.forEach((o) => {
+      if (!o.transaction_id && o.payment_status === "paid" && o.order_date >= startStr && o.order_date <= endStr) {
+        const orderCost = Number(o.total_cogs || 0) + Number(o.shipping_cost || 0) + Number(o.platform_fee || 0);
+        spent += orderCost;
+      }
+    });
+
+    let income = weekIncomes.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    orders.forEach((o) => {
+      if (!o.transaction_id && o.payment_status === "paid" && o.order_date >= startStr && o.order_date <= endStr) {
+        income += Number(o.total_revenue || 0);
+      }
+    });
+
+    const budget = budgetConfig.weeklyBudget;
+    const remaining = budget - spent;
+    const percentUsed = budget > 0 ? Math.min(100, Math.max(0, Math.round((spent / budget) * 1000) / 10)) : 0;
+    const isOverBudget = spent > budget;
+    const overBudgetAmount = Math.max(0, spent - budget);
+    const netProfit = income - spent;
+    const profitMargin = income > 0 ? Math.round((netProfit / income) * 1000) / 10 : 0;
+    const isProfit = netProfit >= 0;
+    const suggestedDailySpend = remaining > 0 ? Math.round(remaining / daysRemaining) : 0;
+
+    const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const dailySpending = dayLabels.map((label, idx) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + idx);
+      const dStr = d.toISOString().split("T")[0];
+      const daySpent = weekExpenses.filter((t) => t.date.split("T")[0] === dStr).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      const dayIncome = weekIncomes.filter((t) => t.date.split("T")[0] === dStr).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      return {
+        date: dStr,
+        dayLabel: label,
+        spent: daySpent,
+        income: dayIncome,
+      };
+    });
+
+    return {
+      period: "week",
+      title,
+      startDateStr: startStr,
+      endDateStr: endStr,
+      budget,
+      spent,
+      remaining,
+      percentUsed,
+      isOverBudget,
+      overBudgetAmount,
+      income,
+      netProfit,
+      profitMargin,
+      isProfit,
+      transactionCount: weekTxs.length,
+      expenseCount: weekExpenses.length,
+      incomeCount: weekIncomes.length,
+      expenses: weekExpenses,
+      incomeTransactions: weekIncomes,
+      daysRemaining,
+      suggestedDailySpend,
+      dailySpending,
+    };
+  }, [transactions, orders, budgetConfig.weeklyBudget]);
 
   // Core Mutation Methods
   const addTransaction = (input: NewTransactionInput): Transaction => {
@@ -2235,6 +2598,12 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
         outstandingLoans,
         chartData,
         salesMetrics,
+        monthlyBudget: budgetConfig.monthlyBudget,
+        weeklyBudget: budgetConfig.weeklyBudget,
+        setMonthlyBudget,
+        setWeeklyBudget,
+        monthlyAnalytics,
+        weeklyAnalytics,
         addTransaction,
         deleteTransaction,
         addStudent,

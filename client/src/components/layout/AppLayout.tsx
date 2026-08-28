@@ -22,6 +22,8 @@ import {
   CalendarDays,
   Plus,
   FileSpreadsheet,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
@@ -87,6 +89,8 @@ interface LayoutContextType {
   selectedRange: string;
   setSelectedRange: (range: string) => void;
   activeSection: NavSection;
+  collapsed: boolean;
+  toggleSidebar: () => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | null>(null);
@@ -112,6 +116,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRange, setSelectedRange] = useState("This month");
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+
+  const toggleSidebar = () => {
+    setCollapsed((prev) => !prev);
+  };
 
   const activeSection = useMemo(() => {
     return pathToSection[location] || "Overview";
@@ -170,101 +179,201 @@ export function AppLayout({ children }: AppLayoutProps) {
         selectedRange,
         setSelectedRange,
         activeSection,
+        collapsed,
+        toggleSidebar,
       }}
     >
       <div className="app-shell">
         {/* Left Sidebar */}
-        <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
-          <div className="brand">
-            <div className="brand-mark">
-              <CompassMark />
-            </div>
-            <div>
-              <div className="brand-name">
-                Fin<span>Track</span>
-              </div>
-              <div className="brand-sub">Personal & Business Finance OS</div>
-            </div>
-            <button
-              className="mobile-close icon-btn"
-              onClick={() => setMobileOpen(false)}
-              aria-label="Close menu"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="workspace-switch">
-            <div className="workspace-avatar">{userInitial}</div>
-            <div>
-              <b>{displayName}'s workspace</b>
-              <span>Personal + business</span>
-            </div>
-            <ChevronDown size={15} className="text-[#8b98aa]" />
-          </div>
-
-          <div className="nav-search">
-            <Search size={15} />
-            <input
-              placeholder="Find a page"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className="nav-group-label">Workspace</div>
-          <nav>
-            {filteredNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeSection === item.label;
-              return (
+        <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${mobileOpen ? "open" : ""}`}>
+          {collapsed ? (
+            <div className="flex flex-col h-full w-full items-center justify-between py-2">
+              <div className="flex flex-col items-center w-full gap-2">
+                {/* Expand toggle button */}
                 <button
-                  key={item.label}
-                  className={`nav-item ${isActive ? "active" : ""}`}
-                  onClick={() => handleNavClick(item.path)}
+                  type="button"
+                  onClick={toggleSidebar}
+                  className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-200/80 hover:bg-blue-100 flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                  title="Show sidebar"
+                  aria-label="Show sidebar"
                 >
-                  <Icon size={17} />
-                  <span>{item.label}</span>
-                  {item.hasCount && <span className="nav-count">{transactions.length}</span>}
+                  <PanelLeftOpen size={19} />
                 </button>
-              );
-            })}
 
-            <button
-              type="button"
-              className="nav-item"
-              onClick={() => {
-                setIsSelectorOpen(true);
-                setMobileOpen(false);
-              }}
-            >
-              <FileSpreadsheet size={17} className="text-emerald-600" />
-              <span>Google Sheets</span>
-              {activeSheet ? (
-                <span className="nav-count" style={{ background: "#d1fae5", color: "#065f46" }}>
-                  Live
-                </span>
-              ) : (
-                <span className="nav-count">Sync</span>
-              )}
-            </button>
-          </nav>
+                <div className="w-8 h-px bg-slate-200 my-0.5" />
 
-          <div className="sidebar-bottom">
-            <div className="support-card">
-              <div className="support-icon">
-                <HelpCircle size={16} />
+                {/* Avatar */}
+                <div
+                  className="w-9 h-9 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0"
+                  title={`${displayName}'s workspace`}
+                >
+                  {userInitial}
+                </div>
+
+                {/* Nav icons */}
+                <nav className="w-full flex flex-col items-center gap-1.5 py-1">
+                  {filteredNavItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeSection === item.label;
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          isActive
+                            ? "bg-[#eaf1ff] text-[#2f6bff] font-semibold before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-[#2f6bff]"
+                            : "text-[#7b8a9e] hover:bg-[#f1f5fa] hover:text-[#2d3748]"
+                        }`}
+                        onClick={() => handleNavClick(item.path)}
+                        title={item.label}
+                        aria-label={item.label}
+                      >
+                        <Icon size={18} />
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    className="relative w-10 h-10 rounded-xl flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setIsSelectorOpen(true);
+                      setMobileOpen(false);
+                    }}
+                    title={activeSheet ? `Google Sheets: ${activeSheet.title}` : "Connect Google Sheets"}
+                    aria-label="Google Sheets"
+                  >
+                    <FileSpreadsheet size={18} />
+                    {activeSheet && (
+                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    )}
+                  </button>
+                </nav>
               </div>
-              <div>
-                <b>Need a hand?</b>
-                <span>See how FinTrack works</span>
+
+              {/* Bottom profile avatar */}
+              <div className="sidebar-bottom w-full flex flex-col items-center pt-2">
+                <UserProfileMenu position="bottom-left" />
               </div>
-              <ArrowUpRight size={14} />
             </div>
-            <div className="profile">
-              <UserProfileMenu position="bottom-left" />
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* Brand Header with Collapse Toggle */}
+              <div className="brand">
+                <div className="brand-mark">
+                  <CompassMark />
+                </div>
+                <div>
+                  <div className="brand-name">
+                    Fin<span>Track</span>
+                  </div>
+                  <div className="brand-sub">Personal & Business Finance OS</div>
+                </div>
+
+                {/* Desktop Collapse Button */}
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  className="hidden md:flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors ml-auto shrink-0 cursor-pointer"
+                  title="Hide sidebar"
+                  aria-label="Hide sidebar"
+                >
+                  <PanelLeftClose size={17} />
+                </button>
+
+                {/* Mobile Close Button */}
+                <button
+                  className="mobile-close icon-btn"
+                  onClick={() => setMobileOpen(false)}
+                  aria-label="Close menu"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Find a page */}
+              <div className="nav-search">
+                <Search size={15} />
+                <input
+                  placeholder="Find a page"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Scrollable Navigation List */}
+              <nav>
+                {filteredNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeSection === item.label;
+                  return (
+                    <button
+                      key={item.label}
+                      className={`nav-item ${isActive ? "active" : ""}`}
+                      onClick={() => handleNavClick(item.path)}
+                    >
+                      <Icon size={17} />
+                      <span>{item.label}</span>
+                      {item.hasCount && <span className="nav-count">{transactions.length}</span>}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className="nav-item"
+                  onClick={() => {
+                    setIsSelectorOpen(true);
+                    setMobileOpen(false);
+                  }}
+                >
+                  <FileSpreadsheet size={17} className="text-emerald-600" />
+                  <span>Google Sheets</span>
+                  {activeSheet ? (
+                    <span className="nav-count" style={{ background: "#d1fae5", color: "#065f46" }}>
+                      Live
+                    </span>
+                  ) : (
+                    <span className="nav-count">Sync</span>
+                  )}
+                </button>
+              </nav>
+
+              {/* Anchored Bottom Section */}
+              <div className="sidebar-bottom">
+                <div className="support-card">
+                  <div className="support-icon">
+                    <HelpCircle size={15} />
+                  </div>
+                  <div>
+                    <b>Need a hand?</b>
+                    <span>FinTrack guide & docs</span>
+                  </div>
+                  <ArrowUpRight size={13} />
+                </div>
+                <div className="profile">
+                  <UserProfileMenu
+                    position="bottom-left"
+                    trigger={
+                      <button
+                        type="button"
+                        className="flex items-center gap-2.5 w-full text-left p-1.5 rounded-lg hover:bg-slate-100/70 transition-colors cursor-pointer"
+                      >
+                        <div className="profile-avatar shrink-0">{userInitial}</div>
+                        <div className="min-w-0 flex-1">
+                          <b className="truncate text-xs text-slate-700 block">{displayName}</b>
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {user?.email || "Personal & Business"}
+                          </span>
+                        </div>
+                        <ChevronDown size={14} className="text-slate-400 shrink-0 ml-auto" />
+                      </button>
+                    }
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </aside>
 
         {mobileOpen && (
@@ -272,18 +381,21 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content Area */}
-        <main className="main-content">
+        <main className={`main-content ${collapsed ? "collapsed" : ""}`}>
           {/* Topbar */}
           <header className="topbar">
+            {/* Mobile-only menu button */}
             <button
+              type="button"
               className="mobile-menu icon-btn"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
             >
               <Menu size={19} />
             </button>
+
             <div className="breadcrumbs">
-              <span>Workspace</span>
+              <span>FinTrack</span>
               <span className="crumb-slash">/</span>
               <b>{activeSection}</b>
             </div>
