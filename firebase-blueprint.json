@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information stored per authenticated user",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique identifier of the user",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address",
+          "maxLength": 255
+        },
+        "fullName": {
+          "type": "string",
+          "description": "User full name",
+          "maxLength": 150
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "URL to the user avatar image",
+          "maxLength": 1000
+        },
+        "phone": {
+          "type": "string",
+          "description": "User contact phone number",
+          "maxLength": 30
+        },
+        "role": {
+          "type": "string",
+          "description": "User authorization role",
+          "enum": ["owner", "admin", "member"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of profile creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of last profile update"
+        }
+      },
+      "required": ["userId", "email", "fullName", "role"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial income and expense transaction entries",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID",
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "description": "Transaction title or description",
+          "maxLength": 255
+        },
+        "amount": {
+          "type": "number",
+          "description": "Monetary value of the transaction"
+        },
+        "type": {
+          "type": "string",
+          "description": "Transaction type category",
+          "enum": ["income", "expense", "student_fee", "client_payment", "loan_received", "loan_repayment", "owner_payment", "other_income", "product_sale", "ad_spend", "shipping_cost", "platform_fee", "product_refund"]
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment channel used",
+          "enum": ["cash", "bank_transfer", "easypaisa", "jazzcash", "card", "other"]
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Transaction date"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category name",
+          "maxLength": 100
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes",
+          "maxLength": 1000
+        }
+      },
+      "required": ["userId", "description", "amount", "type", "paymentMethod", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Collection of individual user profile and preference documents"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User specific financial transactions collection"
+    }
+  }
+}

@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { AddTransactionModal } from "@/components/AddTransactionModal";
+import { AuthModal } from "@/components/auth/AuthModal";
 import { CompassMark } from "@/components/LedgerIllustration";
 import { MonthRangePicker } from "@/components/MonthRangePicker";
 import { useAuth } from "@/contexts/AuthContext";
@@ -109,7 +110,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
-  const { profile, user } = useAuth();
+  const { profile, user, openAuthModal } = useAuth();
   const { transactions } = useFinancialData();
   const { activeSheet, setIsSelectorOpen, syncStatus } = useGoogleSheets();
   const [search, setSearch] = useState("");
@@ -138,8 +139,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     setMobileOpen(false);
   };
 
-  const displayName = profile?.full_name || user?.email?.split("@")[0] || "Tayyab";
-  const userInitial = displayName.charAt(0).toUpperCase();
+  const displayName = profile?.full_name || (user?.email ? user.email.split("@")[0] : "Tayyab Afridi");
+  const userInitial = displayName.split(" ").filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) || "TA";
 
   // Dynamic formatted date e.g. "FRIDAY, AUGUST 21, 2026"
   const formattedDate = useMemo(() => {
@@ -430,6 +431,15 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Bell size={17} />
                 <i />
               </button>
+              {!user && (
+                <button
+                  type="button"
+                  onClick={() => openAuthModal("signin")}
+                  className="px-3 py-1.5 rounded-lg bg-[#183b56] hover:bg-[#122e43] text-white text-xs font-semibold shadow-sm transition-all"
+                >
+                  Sign In
+                </button>
+              )}
               <div className="top-divider" />
               <UserProfileMenu position="top-right" />
             </div>
@@ -480,6 +490,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           open={showAddModal}
           onClose={() => setShowAddModal(false)}
         />
+        <AuthModal />
       </div>
     </LayoutContext.Provider>
   );

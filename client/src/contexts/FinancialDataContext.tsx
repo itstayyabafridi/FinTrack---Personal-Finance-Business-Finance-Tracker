@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 import type {
   Transaction,
   TransactionType,
@@ -1189,6 +1192,63 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.PRODUCT_RETURNS, JSON.stringify(productReturns));
   }, [productReturns]);
 
+  // Firestore Cloud Database Real-time Synchronization for Transactions
+  useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubAuth = onAuthStateChanged(auth, (currentUser: User | null) => {
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
+      if (currentUser) {
+        try {
+          const q = query(collection(db, "transactions"), where("userId", "==", currentUser.uid));
+          unsubscribeSnapshot = onSnapshot(
+            q,
+            (snapshot) => {
+              if (!snapshot.empty) {
+                const cloudTxs: Transaction[] = snapshot.docs.map((docSnap) => {
+                  const data = docSnap.data();
+                  return {
+                    id: docSnap.id,
+                    user_id: data.userId || currentUser.uid,
+                    workspace_id: data.workspaceId || "workspace_1",
+                    type: data.type || "income",
+                    amount: Number(data.amount) || 0,
+                    description: data.description || "",
+                    category: data.category || null,
+                    date: data.date || new Date().toISOString(),
+                    payment_method: data.paymentMethod || "cash",
+                    notes: data.notes || null,
+                    reference_id: data.referenceId || null,
+                    reference_type: data.referenceType || null,
+                    created_at: data.createdAt || new Date().toISOString(),
+                    updated_at: data.updatedAt || new Date().toISOString(),
+                  };
+                });
+                // Sort by date descending
+                cloudTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                setTransactions(cloudTxs);
+              }
+            },
+            (err) => {
+              console.warn("Notice listening to Firestore transactions:", err?.message || err);
+            }
+          );
+        } catch (err) {
+          console.warn("Notice setting up Firestore listener:", err);
+        }
+      }
+    });
+
+    return () => {
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      unsubAuth();
+    };
+  }, []);
+
   // Real-time Global Financial Calculations
   const totalIncome = useMemo(() => {
     // 1. Transaction records categorized as income / sales
@@ -1585,6 +1645,28 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
 
     setTransactions((prev) => [newTx, ...prev]);
 
+    // Persist to Cloud Firestore if user is authenticated
+    if (auth.currentUser) {
+      const docRef = doc(db, "transactions", newTx.id);
+      setDoc(docRef, {
+        id: newTx.id,
+        userId: auth.currentUser.uid,
+        description: newTx.description,
+        amount: Number(newTx.amount),
+        type: newTx.type,
+        date: newTx.date,
+        category: newTx.category || "General",
+        paymentMethod: newTx.payment_method,
+        notes: newTx.notes || "",
+        referenceId: newTx.reference_id || "",
+        referenceType: newTx.reference_type || "",
+        createdAt: newTx.created_at,
+        updatedAt: newTx.updated_at,
+      }).catch((err) => {
+        console.warn("Notice syncing transaction to Firestore:", err);
+      });
+    }
+
     if (input.type === "expense") {
       const exp: Expense = {
         id: `exp_${newTx.id}`,
@@ -1658,6 +1740,12 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
 
   const deleteTransaction = (id: string) => {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+    if (auth.currentUser) {
+      const docRef = doc(db, "transactions", id);
+      deleteDoc(docRef).catch((err) => {
+        console.warn("Notice deleting transaction in Firestore:", err);
+      });
+    }
     toast.info("Transaction deleted");
   };
 

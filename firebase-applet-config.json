@@ -3,6 +3,7 @@
   "appId": "1:422765851098:web:07b320c25b456d221410e3",
   "apiKey": "AIzaSyDk5lcZZVtkXU4CmenoTtDwm8MCansO0eg",
   "authDomain": "gen-lang-client-0617584982.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-fintrackpersonal-98e36143-7707-42ae-9ed5-9ee7aa996ad6",
   "storageBucket": "gen-lang-client-0617584982.firebasestorage.app",
   "messagingSenderId": "422765851098",
   "measurementId": "",

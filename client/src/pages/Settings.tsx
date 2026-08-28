@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Settings2,
   User,
@@ -45,9 +45,29 @@ export default function Settings() {
     restoreDatabase,
   } = useFinancialData();
 
+  const getTabFromUrl = (): "profile" | "workspace" | "backup" | "notifications" | "security" => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam && ["profile", "workspace", "backup", "notifications", "security"].includes(tabParam)) {
+        return tabParam as "profile" | "workspace" | "backup" | "notifications" | "security";
+      }
+    } catch {}
+    return "profile";
+  };
+
   const [activeTab, setActiveTab] = useState<
     "profile" | "workspace" | "backup" | "notifications" | "security"
-  >("profile");
+  >(getTabFromUrl);
+
+  useEffect(() => {
+    const handleUrlSync = () => {
+      setActiveTab(getTabFromUrl());
+    };
+    handleUrlSync();
+    window.addEventListener("popstate", handleUrlSync);
+    return () => window.removeEventListener("popstate", handleUrlSync);
+  }, []);
   const [fullName, setFullName] = useState(profile?.full_name || "Tayyab");
   const [email, setEmail] = useState(profile?.email || user?.email || "tayyab@example.com");
   const [phone, setPhone] = useState(profile?.phone || "+92 300 1234567");
