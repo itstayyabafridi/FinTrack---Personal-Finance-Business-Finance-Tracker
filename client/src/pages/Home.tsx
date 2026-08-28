@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { useAppLayout } from "@/components/layout/AppLayout";
 import { useFinancialData } from "@/contexts/FinancialDataContext";
 import { LedgerIllustration } from "@/components/LedgerIllustration";
+import { GoogleSheetSyncBanner } from "@/components/google-sheets/GoogleSheetSyncBanner";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -102,6 +103,9 @@ export default function Home() {
 
   return (
     <>
+      {/* Google Sheets Live Sync Bar */}
+      <GoogleSheetSyncBanner />
+
       {/* Position Hero Strip */}
       <section className="position-strip">
         <div className="position-copy">

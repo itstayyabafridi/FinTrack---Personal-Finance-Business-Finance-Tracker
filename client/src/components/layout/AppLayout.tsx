@@ -21,6 +21,7 @@ import {
   X,
   CalendarDays,
   Plus,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
@@ -29,6 +30,7 @@ import { CompassMark } from "@/components/LedgerIllustration";
 import { MonthRangePicker } from "@/components/MonthRangePicker";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFinancialData } from "@/contexts/FinancialDataContext";
+import { useGoogleSheets } from "@/contexts/GoogleSheetsContext";
 
 export type NavSection =
   | "Overview"
@@ -105,6 +107,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
   const { profile, user } = useAuth();
   const { transactions } = useFinancialData();
+  const { activeSheet, setIsSelectorOpen, syncStatus } = useGoogleSheets();
   const [search, setSearch] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -226,6 +229,25 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </button>
               );
             })}
+
+            <button
+              type="button"
+              className="nav-item"
+              onClick={() => {
+                setIsSelectorOpen(true);
+                setMobileOpen(false);
+              }}
+            >
+              <FileSpreadsheet size={17} className="text-emerald-600" />
+              <span>Google Sheets</span>
+              {activeSheet ? (
+                <span className="nav-count" style={{ background: "#d1fae5", color: "#065f46" }}>
+                  Live
+                </span>
+              ) : (
+                <span className="nav-count">Sync</span>
+              )}
+            </button>
           </nav>
 
           <div className="sidebar-bottom">
@@ -266,6 +288,32 @@ export function AppLayout({ children }: AppLayoutProps) {
               <b>{activeSection}</b>
             </div>
             <div className="top-actions">
+              <button
+                onClick={() => setIsSelectorOpen(true)}
+                className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                  activeSheet
+                    ? "bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border-emerald-200"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+                }`}
+                title={activeSheet ? `Connected to ${activeSheet.title}` : "Connect Google Sheet"}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="max-w-[120px] truncate">
+                  {activeSheet ? activeSheet.title : "Google Sheets"}
+                </span>
+                {activeSheet && (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      syncStatus === "syncing"
+                        ? "bg-amber-500 animate-pulse"
+                        : syncStatus === "error"
+                        ? "bg-rose-500"
+                        : "bg-emerald-500"
+                    }`}
+                  />
+                )}
+              </button>
+
               <button className="top-icon icon-btn" aria-label="Notifications">
                 <Bell size={17} />
                 <i />

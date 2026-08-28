@@ -6,6 +6,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { FinancialDataProvider } from "./contexts/FinancialDataContext";
+import { GoogleSheetsProvider } from "./contexts/GoogleSheetsContext";
+import { AutoSyncManager } from "./components/google-sheets/AutoSyncManager";
 import { AppLayout } from "./components/layout/AppLayout";
 import Home from "./pages/Home";
 import SalesBusiness from "./pages/SalesBusiness";
@@ -49,10 +51,13 @@ export default function App() {
       <ThemeProvider defaultTheme="light">
         <AuthProvider>
           <FinancialDataProvider>
-            <TooltipProvider>
-              <Toaster position="top-right" />
-              <Router />
-            </TooltipProvider>
+            <GoogleSheetsProvider>
+              <TooltipProvider>
+                <Toaster position="top-right" />
+                <AutoSyncManager />
+                <Router />
+              </TooltipProvider>
+            </GoogleSheetsProvider>
           </FinancialDataProvider>
         </AuthProvider>
       </ThemeProvider>

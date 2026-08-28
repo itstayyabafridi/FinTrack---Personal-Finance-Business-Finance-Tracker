@@ -1,6 +1,6 @@
 {
   "name": "FinTrack",
-  "description": "Personal & Business Finance OS for tracking transactions, sales, ecommerce products, orders, ad spend ROAS, inventory, loans, students fees, and financial reporting.",
+  "description": "Personal & Business Finance OS with real-time Google Sheets synchronization, tracking transactions, sales, ecommerce products, orders, ad spend ROAS, inventory, loans, students fees, and financial reporting.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
