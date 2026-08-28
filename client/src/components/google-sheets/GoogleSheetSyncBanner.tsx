@@ -27,6 +27,7 @@ export function GoogleSheetSyncBanner() {
     setAutoSyncEnabled,
     syncData,
     disconnectSheet,
+    authError,
   } = useGoogleSheets();
 
   const financialData = useFinancialData();
@@ -68,6 +69,11 @@ export function GoogleSheetSyncBanner() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-200/60">
                   Google Workspace Sync
                 </span>
+                {authError?.code === "auth/unauthorized-domain" && (
+                  <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                    Domain Setup Needed
+                  </span>
+                )}
               </div>
               <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-1">
                 Connect your Google Sheet to auto-store dashboard & records

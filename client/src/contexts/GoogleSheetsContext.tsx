@@ -7,13 +7,14 @@ import React, {
   useRef,
   type ReactNode,
 } from "react";
-import { type User } from "firebase/auth";
 import {
   initAuth,
   googleSignIn,
   logoutGoogle,
   getAccessToken,
-  setCachedAccessToken,
+  authenticateWithToken,
+  getFirebaseDomainConfig,
+  type GoogleUser,
 } from "@/lib/googleAuth";
 import {
   getSpreadsheetMetadata,
@@ -31,11 +32,22 @@ export interface ConnectedSheet {
   connectedAt: string;
 }
 
+export interface AuthErrorInfo {
+  code: string;
+  message: string;
+  domain?: string;
+  settingsUrl?: string;
+  projectId?: string;
+}
+
 interface GoogleSheetsContextType {
-  user: User | null;
+  user: GoogleUser | null;
   isAuthenticated: boolean;
   isAuthenticating: boolean;
+  authError: AuthErrorInfo | null;
+  clearAuthError: () => void;
   signInWithGoogle: () => Promise<string | null>;
+  connectWithToken: (token: string) => Promise<string | null>;
   signOutGoogle: () => Promise<void>;
   
   // Active sheet management
@@ -69,8 +81,9 @@ const STORAGE_KEYS = {
 const GoogleSheetsContext = createContext<GoogleSheetsContextType | null>(null);
 
 export function GoogleSheetsProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<GoogleUser | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authError, setAuthError] = useState<AuthErrorInfo | null>(null);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -103,6 +116,10 @@ export function GoogleSheetsProvider({ children }: { children: ReactNode }) {
 
   // Keep a ref to latest access token & state
   const accessTokenRef = useRef<string | null>(null);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+  }, []);
 
   // Initialize Firebase Auth listener
   useEffect(() => {
@@ -144,36 +161,86 @@ export function GoogleSheetsProvider({ children }: { children: ReactNode }) {
   // Sign in with Google
   const signInWithGoogle = useCallback(async (): Promise<string | null> => {
     setIsAuthenticating(true);
+    clearAuthError();
     try {
       const res = await googleSignIn();
       if (res?.accessToken) {
         accessTokenRef.current = res.accessToken;
         setUser(res.user);
+        setAuthError(null);
         toast.success(`Connected to Google as ${res.user.email || res.user.displayName || "user"}`);
         return res.accessToken;
       }
       return null;
     } catch (err: any) {
-      console.error("Google sign in failed:", err);
-      // Friendly message for popup cancellation or network
-      if (err?.code === "auth/popup-closed-by-user") {
-        toast.info("Sign-in window closed.");
-      } else {
-        toast.error(err?.message || "Google Authentication failed. Please try again.");
+      if (
+        err?.code === "auth/popup-closed-by-user" ||
+        err?.code === "auth/cancelled-popup-request" ||
+        String(err?.message || "").includes("popup-closed-by-user")
+      ) {
+        // Normal user dismissal of sign-in window
+        return null;
       }
+
+      if (err?.code === "auth/unauthorized-domain" || (err?.message && String(err.message).includes("unauthorized-domain"))) {
+        const config = getFirebaseDomainConfig();
+        const errInfo: AuthErrorInfo = {
+          code: "auth/unauthorized-domain",
+          message: err.message,
+          domain: err.domain || config.currentDomain,
+          settingsUrl: err.settingsUrl || config.settingsUrl,
+          projectId: config.projectId,
+        };
+        setAuthError(errInfo);
+        toast.error("Firebase domain authorization required.", {
+          description: `Add "${config.currentDomain}" to Authorized Domains in Firebase Console.`,
+        });
+        return null;
+      }
+
+      if (err?.code === "auth/popup-blocked") {
+        toast.error("Sign-in popup blocked", {
+          description: "Please allow popups for this site in your browser address bar and try again.",
+        });
+        return null;
+      }
+
+      console.warn("Google sign in notice:", err?.message || err);
+      toast.error(err?.message || "Google Authentication failed. Please try again.");
       return null;
     } finally {
       setIsAuthenticating(false);
     }
-  }, []);
+  }, [clearAuthError]);
+
+  // Direct token authentication
+  const connectWithToken = useCallback(async (token: string): Promise<string | null> => {
+    setIsAuthenticating(true);
+    clearAuthError();
+    try {
+      const res = await authenticateWithToken(token);
+      accessTokenRef.current = res.accessToken;
+      setUser(res.user);
+      setAuthError(null);
+      toast.success(`Connected to Google as ${res.user.email || res.user.displayName || "user"}`);
+      return res.accessToken;
+    } catch (err: any) {
+      console.warn("Token authentication notice:", err?.message || err);
+      toast.error(err.message || "Failed to authenticate with token.");
+      return null;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  }, [clearAuthError]);
 
   // Sign out
   const signOutGoogle = useCallback(async () => {
     await logoutGoogle();
     accessTokenRef.current = null;
     setUser(null);
+    clearAuthError();
     toast.info("Signed out of Google account.");
-  }, []);
+  }, [clearAuthError]);
 
   // Helper to ensure valid access token before Google API calls
   const requireToken = useCallback(async (): Promise<string> => {
@@ -268,7 +335,7 @@ export function GoogleSheetsProvider({ children }: { children: ReactNode }) {
         }
         return true;
       } catch (err: any) {
-        console.error("Failed to sync to Google Sheet:", err);
+        console.warn("Google Sheet sync notice:", err?.message || err);
         setSyncStatus("error");
         const message = err?.message || "Sync failed. Check spreadsheet permissions.";
         setSyncError(message);
@@ -287,7 +354,10 @@ export function GoogleSheetsProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated: !!user && !!accessTokenRef.current,
         isAuthenticating,
+        authError,
+        clearAuthError,
         signInWithGoogle,
+        connectWithToken,
         signOutGoogle,
         activeSheet,
         setActiveSheet,

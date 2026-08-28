@@ -30,6 +30,12 @@ import {
   Sparkles,
   Loader2,
   X,
+  ShieldAlert,
+  Copy,
+  Check,
+  KeyRound,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,7 +52,10 @@ export function GoogleSheetSelectorModal({
     user,
     isAuthenticated,
     isAuthenticating,
+    authError,
+    clearAuthError,
     signInWithGoogle,
+    connectWithToken,
     signOutGoogle,
     activeSheet,
     connectExistingSheet,
@@ -62,6 +71,15 @@ export function GoogleSheetSelectorModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Domain Assistant & Manual Token states
+  const [copiedDomain, setCopiedDomain] = useState(false);
+  const [showManualToken, setShowManualToken] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+  const [isConnectingToken, setIsConnectingToken] = useState(false);
+  const [forceShowDomainHelper, setForceShowDomainHelper] = useState(false);
+
+  const currentHostname = typeof window !== "undefined" ? window.location.hostname : "";
+
   // Form states
   const [customTitle, setCustomTitle] = useState(
     `FinTrack Financial Ledger - ${new Date().toLocaleDateString("en-US", {
@@ -71,6 +89,30 @@ export function GoogleSheetSelectorModal({
   );
   const [sheetUrlInput, setSheetUrlInput] = useState("");
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const handleCopyDomain = (domainToCopy: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(domainToCopy);
+      setCopiedDomain(true);
+      toast.success(`Copied "${domainToCopy}" to clipboard!`);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    }
+  };
+
+  const handleConnectWithToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualToken.trim()) return;
+    setIsConnectingToken(true);
+    try {
+      const token = await connectWithToken(manualToken.trim());
+      if (token) {
+        toast.success("Connected successfully with OAuth token!");
+        loadDriveFiles();
+      }
+    } finally {
+      setIsConnectingToken(false);
+    }
+  };
 
   // Fetch spreadsheets when authenticated & modal opens
   useEffect(() => {
@@ -94,7 +136,7 @@ export function GoogleSheetSelectorModal({
       const files = await listSpreadsheets(token);
       setSpreadsheets(files);
     } catch (err: any) {
-      console.error("Failed to list spreadsheets:", err);
+      console.warn("Drive spreadsheet list notice:", err?.message || err);
       setFetchError(err?.message || "Could not load spreadsheets from Google Drive.");
     } finally {
       setLoadingFiles(false);
@@ -242,7 +284,7 @@ export function GoogleSheetSelectorModal({
                 Connect with permission to select existing spreadsheets from your Google Drive or generate a dedicated FinTrack financial sheet. All your transactions and dashboard updates will synchronize automatically.
               </p>
 
-              <div className="flex justify-center">
+              <div className="flex flex-col items-center gap-3">
                 <GoogleSignInButton
                   onClick={async () => {
                     const token = await signInWithGoogle();
@@ -253,6 +295,162 @@ export function GoogleSheetSelectorModal({
                   isLoading={isAuthenticating}
                   text="Sign in with Google to Connect Sheets"
                 />
+
+                {!forceShowDomainHelper && !authError && (
+                  <button
+                    type="button"
+                    onClick={() => setForceShowDomainHelper(true)}
+                    className="text-[11px] text-slate-400 hover:text-slate-600 underline font-medium mt-1"
+                  >
+                    Troubleshoot sign-in or view Authorized Domain setup
+                  </button>
+                )}
+              </div>
+
+              {/* Authorized Domain Setup Assistant for Firebase */}
+              {(authError?.code === "auth/unauthorized-domain" || forceShowDomainHelper) && (
+                <div className="mt-6 text-left rounded-2xl border border-amber-300/80 bg-amber-50/75 p-4 sm:p-5 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 text-amber-800 flex items-center justify-center shrink-0">
+                      <ShieldAlert className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-md">
+                          Firebase Domain Setup • auth/unauthorized-domain
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearAuthError();
+                            setForceShowDomainHelper(false);
+                          }}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                          title="Dismiss notice"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 mt-2">
+                        Add this domain to Firebase Authorized Domains
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                        Firebase Authentication restricts OAuth popups to authorized domains. Because this app is running in a secure Cloud Run container, its host address must be registered in your Firebase Console project.
+                      </p>
+
+                      {/* Current Domain Box with 1-click Copy */}
+                      <div className="mt-3 flex items-center gap-2 bg-white border border-amber-200/90 rounded-xl p-2 shadow-xs">
+                        <div className="flex-1 font-mono text-xs text-slate-800 font-semibold truncate px-1 select-all">
+                          {currentHostname || "ais-dev-ksxry56v3dyngxv7rzz32y-614438679411.asia-southeast1.run.app"}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopyDomain(currentHostname)}
+                          className="h-7 text-xs font-semibold gap-1.5 bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 shrink-0"
+                        >
+                          {copiedDomain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedDomain ? "Copied!" : "Copy Domain"}
+                        </Button>
+                      </div>
+
+                      {/* 3-Step Walkthrough */}
+                      <div className="mt-3 bg-white/90 border border-amber-200/70 rounded-xl p-3 text-xs text-slate-700 space-y-1.5">
+                        <p className="font-semibold text-slate-800 mb-1">Quick 3-step authorization:</p>
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                          <span>Click <b>Open Firebase Settings</b> below (opens Authentication &gt; Settings).</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                          <span>Scroll down to <b>Authorized domains</b> and click <b>Add domain</b>.</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                          <span>Paste <code>{currentHostname}</code> and click <b>Save</b>, then click <b>Retry Sign In</b> below.</span>
+                        </div>
+                      </div>
+
+                      {/* Primary Actions */}
+                      <div className="mt-3.5 flex flex-wrap items-center gap-2">
+                        <a
+                          href={authError?.settingsUrl || `https://console.firebase.google.com/project/${authError?.projectId || "gen-lang-client-0617584982"}/authentication/settings`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white h-8 px-3 rounded-lg shadow-xs transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Open Firebase Settings ↗
+                        </a>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            const token = await signInWithGoogle();
+                            if (token) loadDriveFiles();
+                          }}
+                          disabled={isAuthenticating}
+                          className="h-8 text-xs font-semibold bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isAuthenticating ? "animate-spin" : ""}`} />
+                          Retry Sign In
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Direct Token Connection Fallback */}
+              <div className="mt-5 border-t border-slate-100 pt-4 text-left">
+                <button
+                  type="button"
+                  onClick={() => setShowManualToken(!showManualToken)}
+                  className="flex items-center justify-between w-full text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors py-1"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-slate-400" />
+                    Alternative: Connect using Google OAuth Access Token
+                  </span>
+                  {showManualToken ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                </button>
+
+                {showManualToken && (
+                  <form onSubmit={handleConnectWithToken} className="mt-3 p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2.5">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Paste a temporary OAuth token from{" "}
+                      <a
+                        href="https://developers.google.com/oauthplayground"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline font-medium hover:text-blue-700"
+                      >
+                        Google OAuth 2.0 Playground
+                      </a>{" "}
+                      (with Drive & Sheets scopes) or via <code>gcloud auth print-access-token</code> to connect instantly without waiting for domain authorization.
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="ya29.a0AfH6..."
+                        value={manualToken}
+                        onChange={(e) => setManualToken(e.target.value)}
+                        className="h-8 text-xs font-mono bg-white"
+                      />
+                      <Button
+                        type="submit"
+                        disabled={!manualToken.trim() || isConnectingToken}
+                        size="sm"
+                        className="h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                      >
+                        {isConnectingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Connect Token"}
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               <div className="mt-8 grid grid-cols-3 gap-3 text-left border-t border-slate-100 pt-6">

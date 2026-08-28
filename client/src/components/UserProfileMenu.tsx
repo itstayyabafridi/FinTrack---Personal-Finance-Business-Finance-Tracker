@@ -35,8 +35,8 @@ export function UserProfileMenu({ position = "top-right", trigger }: UserProfile
     try {
       await signOut();
       toast.success("Logged out successfully");
-    } catch (error) {
-      console.error("Error logging out:", error);
+    } catch (error: any) {
+      console.warn("Notice logging out:", error?.message || error);
       toast.error("Failed to log out");
     }
     setOpen(false);
