@@ -26,7 +26,12 @@ export type TransactionType =
   | "loan_received"
   | "loan_repayment"
   | "owner_payment"
-  | "other_income";
+  | "other_income"
+  | "product_sale"
+  | "ad_spend"
+  | "shipping_cost"
+  | "platform_fee"
+  | "product_refund";
 
 export type PaymentMethod =
   | "cash"
@@ -172,6 +177,7 @@ export interface Owner {
 export interface OwnerPayment {
   id: string;
   owner_id: string;
+  recipient_name?: string | null;
   transaction_id: string;
   amount: number;
   date: string;
@@ -189,5 +195,205 @@ export interface Notification {
   read: boolean;
   reference_id: string | null;
   reference_type: string | null;
+  created_at: string;
+}
+
+// ==========================================
+// SALES & BUSINESS MODULE
+// ==========================================
+
+export type ProductType = "physical" | "digital";
+export type ProductPlatform =
+  | "shopify"
+  | "woocommerce"
+  | "etsy"
+  | "gumroad"
+  | "amazon"
+  | "daraz"
+  | "direct"
+  | "other";
+export type ProductStatus = "active" | "draft" | "archived";
+
+export interface Product {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  name: string;
+  type: ProductType;
+  sku: string;
+  category: string;
+  selling_price: number;
+  cost_price: number;
+  platform: ProductPlatform;
+  stock_quantity: number; // 0 for digital
+  low_stock_threshold: number;
+  image_url?: string | null;
+  status: ProductStatus;
+  description?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CustomerStatus = "new" | "active" | "returning" | "vip" | "inactive";
+
+export interface Customer {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  city?: string | null;
+  country?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  status: CustomerStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OrderStatus =
+  | "pending"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "cancelled"
+  | "returned";
+
+export type OrderPaymentStatus =
+  | "pending"
+  | "paid"
+  | "partially_paid"
+  | "refunded";
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  product_type: ProductType;
+  unit_price: number;
+  unit_cost: number;
+  quantity: number;
+  total_price: number;
+  total_cost: number;
+  notes?: string | null;
+}
+
+export interface Order {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  order_number: string;
+  customer_id?: string | null;
+  customer_name: string;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  order_date: string;
+  order_status: OrderStatus;
+  payment_status: OrderPaymentStatus;
+  payment_method: PaymentMethod;
+  platform: ProductPlatform;
+  ad_campaign_id?: string | null;
+  source?: string | null;
+
+  items: OrderItem[];
+  subtotal: number;
+  discount: number;
+  shipping_cost: number;
+  packaging_cost: number;
+  platform_fee: number;
+  payment_fee: number;
+  ad_cost: number;
+
+  total_revenue: number; // (subtotal - discount + shipping_cost)
+  total_cogs: number;    // sum of (unit_cost * quantity)
+  actual_profit: number; // total_revenue - total_cogs - shipping_cost - packaging_cost - platform_fee - payment_fee - ad_cost
+
+  notes?: string | null;
+  transaction_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InventoryMovementType =
+  | "stock_added"
+  | "sale"
+  | "return"
+  | "damaged"
+  | "adjustment";
+
+export interface InventoryMovement {
+  id: string;
+  user_id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number; // positive (added/returned) or negative (sold/damaged)
+  previous_stock: number;
+  new_stock: number;
+  type: InventoryMovementType;
+  date: string;
+  reason: string;
+  reference_id?: string | null;
+  reference_type?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
+export type AdPlatform =
+  | "meta"
+  | "facebook"
+  | "instagram"
+  | "tiktok"
+  | "google"
+  | "pinterest"
+  | "other";
+
+export type AdCampaignStatus = "draft" | "active" | "paused" | "completed";
+
+export interface AdCampaign {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  name: string;
+  platform: AdPlatform;
+  product_id?: string | null;
+  product_ids?: string[];
+  objective: string;
+  start_date: string;
+  end_date?: string | null;
+  budget: number;
+  actual_spend: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  conversions: number;
+  orders_count: number;
+  attributed_revenue: number;
+  status: AdCampaignStatus;
+  notes?: string | null;
+  expense_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductReturn {
+  id: string;
+  user_id: string;
+  order_id: string;
+  order_number: string;
+  customer_name: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  refund_amount: number;
+  refund_date: string;
+  reason: string;
+  restock_inventory: boolean;
+  return_shipping_cost: number;
+  notes?: string | null;
   created_at: string;
 }

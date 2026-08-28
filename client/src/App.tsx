@@ -1,4 +1,3 @@
-/* Harbor OS: application shell is intentionally light, with the dashboard owning navigation and workspace state. */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -6,7 +5,10 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { FinancialDataProvider } from "./contexts/FinancialDataContext";
+import { AppLayout } from "./components/layout/AppLayout";
 import Home from "./pages/Home";
+import SalesBusiness from "./pages/SalesBusiness";
 import Transactions from "./pages/Transactions";
 import StudentsFees from "./pages/StudentsFees";
 import Clients from "./pages/Clients";
@@ -19,20 +21,25 @@ import Settings from "./pages/Settings";
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/transactions" component={Transactions} />
-      <Route path="/students-fees" component={StudentsFees} />
-      <Route path="/clients" component={Clients} />
-      <Route path="/projects" component={Projects} />
-      <Route path="/expenses" component={Expenses} />
-      <Route path="/owner-payments" component={OwnerPayments} />
-      <Route path="/loans" component={Loans} />
-      <Route path="/reports" component={Reports} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/sales-business" component={SalesBusiness} />
+        <Route path="/sales" component={SalesBusiness} />
+        <Route path="/products" component={SalesBusiness} />
+        <Route path="/transactions" component={Transactions} />
+        <Route path="/students-fees" component={StudentsFees} />
+        <Route path="/clients" component={Clients} />
+        <Route path="/projects" component={Projects} />
+        <Route path="/expenses" component={Expenses} />
+        <Route path="/owner-payments" component={OwnerPayments} />
+        <Route path="/loans" component={Loans} />
+        <Route path="/reports" component={Reports} />
+        <Route path="/settings" component={Settings} />
+        <Route path="/404" component={NotFound} />
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
   );
 }
 
@@ -41,10 +48,12 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster position="top-right" />
-            <Router />
-          </TooltipProvider>
+          <FinancialDataProvider>
+            <TooltipProvider>
+              <Toaster position="top-right" />
+              <Router />
+            </TooltipProvider>
+          </FinancialDataProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

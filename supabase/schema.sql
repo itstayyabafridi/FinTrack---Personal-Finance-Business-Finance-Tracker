@@ -377,6 +377,194 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
+-- ============================================================
+-- SALES & BUSINESS MODULE TABLES
+-- ============================================================
+
+-- Products
+CREATE TABLE IF NOT EXISTS public.products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('physical', 'digital')),
+  sku TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'General',
+  selling_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  platform TEXT NOT NULL DEFAULT 'direct' CHECK (platform IN ('shopify', 'woocommerce', 'etsy', 'gumroad', 'amazon', 'direct', 'other')),
+  stock_quantity INTEGER NOT NULL DEFAULT 0,
+  low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+  image_url TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'draft', 'archived')),
+  description TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Customers
+CREATE TABLE IF NOT EXISTS public.customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  whatsapp TEXT,
+  country TEXT,
+  address TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('new', 'active', 'returning', 'vip', 'inactive')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Ad Campaigns
+CREATE TABLE IF NOT EXISTS public.ad_campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  platform TEXT NOT NULL CHECK (platform IN ('meta', 'facebook', 'instagram', 'tiktok', 'google', 'pinterest', 'other')),
+  product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+  objective TEXT NOT NULL DEFAULT 'Conversions',
+  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  end_date DATE,
+  budget NUMERIC(12,2) NOT NULL DEFAULT 0,
+  actual_spend NUMERIC(12,2) NOT NULL DEFAULT 0,
+  impressions INTEGER NOT NULL DEFAULT 0,
+  reach INTEGER NOT NULL DEFAULT 0,
+  clicks INTEGER NOT NULL DEFAULT 0,
+  conversions INTEGER NOT NULL DEFAULT 0,
+  orders_count INTEGER NOT NULL DEFAULT 0,
+  attributed_revenue NUMERIC(12,2) NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft', 'active', 'paused', 'completed')),
+  notes TEXT,
+  expense_id UUID REFERENCES public.expenses(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Orders
+CREATE TABLE IF NOT EXISTS public.orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL,
+  order_number TEXT NOT NULL,
+  customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+  customer_name TEXT NOT NULL,
+  customer_email TEXT,
+  customer_phone TEXT,
+  order_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  order_status TEXT NOT NULL DEFAULT 'delivered' CHECK (order_status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled', 'returned')),
+  payment_status TEXT NOT NULL DEFAULT 'paid' CHECK (payment_status IN ('pending', 'paid', 'partially_paid', 'refunded')),
+  payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+  platform TEXT NOT NULL DEFAULT 'direct',
+  ad_campaign_id UUID REFERENCES public.ad_campaigns(id) ON DELETE SET NULL,
+  source TEXT,
+  subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+  discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  shipping_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  packaging_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  platform_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  payment_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ad_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_revenue NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_cogs NUMERIC(12,2) NOT NULL DEFAULT 0,
+  actual_profit NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  transaction_id UUID REFERENCES public.transactions(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Order Items (Supports multiple products per order)
+CREATE TABLE IF NOT EXISTS public.order_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  product_name TEXT NOT NULL,
+  product_sku TEXT NOT NULL,
+  product_type TEXT NOT NULL DEFAULT 'physical',
+  unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  unit_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  total_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT
+);
+
+-- Inventory Movements (Complete Audit Log)
+CREATE TABLE IF NOT EXISTS public.inventory_movements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  product_name TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  previous_stock INTEGER NOT NULL DEFAULT 0,
+  new_stock INTEGER NOT NULL DEFAULT 0,
+  type TEXT NOT NULL CHECK (type IN ('stock_added', 'sale', 'return', 'damaged', 'adjustment')),
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  reason TEXT NOT NULL,
+  reference_id TEXT,
+  reference_type TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Returns and Refunds
+CREATE TABLE IF NOT EXISTS public.product_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  order_number TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  product_name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  refund_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  refund_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  reason TEXT NOT NULL,
+  restock_inventory BOOLEAN NOT NULL DEFAULT true,
+  return_shipping_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================
+-- RLS POLICIES FOR SALES & BUSINESS
+-- ============================================================
+
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_returns ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "products_all_own" ON public.products FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "customers_all_own" ON public.customers FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "ad_campaigns_all_own" ON public.ad_campaigns FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "orders_all_own" ON public.orders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "order_items_all_own" ON public.order_items FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.orders o WHERE o.id = order_items.order_id AND o.user_id = auth.uid())
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM public.orders o WHERE o.id = order_items.order_id AND o.user_id = auth.uid())
+);
+CREATE POLICY "inventory_movements_all_own" ON public.inventory_movements FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "product_returns_all_own" ON public.product_returns FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON public.products
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON public.customers
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_ad_campaigns_updated_at BEFORE UPDATE ON public.ad_campaigns
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Auto-create default workspace on user signup
 CREATE OR REPLACE FUNCTION handle_new_user_workspace()
 RETURNS TRIGGER AS $$
@@ -390,3 +578,5 @@ $$ language 'plpgsql';
 CREATE TRIGGER on_auth_user_workspace_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user_workspace();
+
+

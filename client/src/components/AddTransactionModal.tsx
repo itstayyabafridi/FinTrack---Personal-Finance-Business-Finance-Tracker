@@ -1,447 +1,831 @@
 import { useState, useEffect } from "react";
-import { X, Plus, CheckCircle2, ArrowUpRight, User, Building2, CreditCard, Landmark, HandCoins, BookOpen, DollarSign } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  X,
+  TrendingUp,
+  TrendingDown,
+  GraduationCap,
+  BriefcaseBusiness,
+  CreditCard,
+  HandCoins,
+  Landmark,
+  BookOpen,
+  DollarSign,
+  ChevronDown,
+  Calendar,
+  CheckCircle2,
+  User,
+  Users,
+  Building,
+  Sparkles,
+  ShoppingBag,
+  Megaphone,
+} from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { useFinancialData } from "@/contexts/FinancialDataContext";
 import type { TransactionType, PaymentMethod } from "@shared/types";
 
 interface AddTransactionModalProps {
   open: boolean;
   onClose: () => void;
+  defaultType?: TransactionType;
 }
 
-const TRANSACTION_TYPES: { value: TransactionType; label: string; icon: any; description: string }[] = [
-  { value: "income", label: "Income", icon: TrendingUp, description: "General income (salary, freelance, etc.)" },
-  { value: "other_income", label: "Other Income", icon: DollarSign, description: "Miscellaneous income sources" },
-  { value: "student_fee", label: "Student Fee", icon: User, description: "Fee received from a student" },
-  { value: "client_payment", label: "Client Payment", icon: Building2, description: "Payment received from a client" },
-  { value: "expense", label: "Expense", icon: CreditCard, description: "Business or personal expense" },
-  { value: "owner_payment", label: "Owner Payment", icon: HandCoins, description: "Payment to business owner/partner" },
-  { value: "loan_received", label: "Loan Received", icon: Landmark, description: "Money borrowed (increases cash, not income)" },
-  { value: "loan_repayment", label: "Loan Repayment", icon: BookOpen, description: "Repayment of borrowed money" },
+const TRANSACTION_TYPES: {
+  value: TransactionType;
+  label: string;
+  icon: any;
+  direction: "in" | "out";
+  hasPersonField: boolean;
+  personLabel?: string;
+  personPlaceholder?: string;
+  personSubtitle?: string;
+}[] = [
+  {
+    value: "income",
+    label: "Income",
+    icon: TrendingUp,
+    direction: "in",
+    hasPersonField: false,
+  },
+  {
+    value: "expense",
+    label: "Expense",
+    icon: TrendingDown,
+    direction: "out",
+    hasPersonField: false,
+  },
+  {
+    value: "product_sale",
+    label: "Product Sale",
+    icon: ShoppingBag,
+    direction: "in",
+    hasPersonField: true,
+    personLabel: "Customer Name (Buyer)",
+    personPlaceholder: "e.g. Hamza Tariq, Online Customer",
+    personSubtitle: "Name of customer or buyer who purchased product",
+  },
+  {
+    value: "ad_spend",
+    label: "Ad Spend / Marketing",
+    icon: Megaphone,
+    direction: "out",
+    hasPersonField: true,
+    personLabel: "Campaign / Platform Name",
+    personPlaceholder: "e.g. Meta Ads Retargeting, TikTok UGC Boost",
+    personSubtitle: "Advertising campaign name or marketing channel",
+  },
+  {
+    value: "loan_received",
+    label: "Loan Received",
+    icon: Landmark,
+    direction: "in",
+    hasPersonField: true,
+    personLabel: "Lender Name (Received From)",
+    personPlaceholder: "e.g. Bank Alfalah, Ahmad Khan, Brother, Investor",
+    personSubtitle: "Enter name of person, lender, or bank providing this loan",
+  },
+  {
+    value: "owner_payment",
+    label: "Owner Payment",
+    icon: HandCoins,
+    direction: "out",
+    hasPersonField: true,
+    personLabel: "Recipient Name (Owner / Partner)",
+    personPlaceholder: "e.g. Tayyab Afridi, Co-Founder Name",
+    personSubtitle: "Enter name of owner or partner receiving this withdrawal",
+  },
+  {
+    value: "loan_repayment",
+    label: "Loan Repayment",
+    icon: BookOpen,
+    direction: "out",
+    hasPersonField: true,
+    personLabel: "Lender / Creditor Name (Paid To)",
+    personPlaceholder: "e.g. Bank Alfalah, Hamza",
+    personSubtitle: "Name of the lender or creditor being repaid",
+  },
+  {
+    value: "client_payment",
+    label: "Client Payment",
+    icon: BriefcaseBusiness,
+    direction: "in",
+    hasPersonField: true,
+    personLabel: "Client / Customer Name",
+    personPlaceholder: "e.g. Acme Corp, TechSoft Inc., John Doe",
+    personSubtitle: "Client or organization sending payment",
+  },
+  {
+    value: "student_fee",
+    label: "Student Fee",
+    icon: GraduationCap,
+    direction: "in",
+    hasPersonField: true,
+    personLabel: "Student Name",
+    personPlaceholder: "e.g. Sarah Khan, Muhammad Ali",
+    personSubtitle: "Student submitting tuition or admission fee",
+  },
+  {
+    value: "other_income",
+    label: "Other Income",
+    icon: DollarSign,
+    direction: "in",
+    hasPersonField: false,
+  },
 ];
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: "cash", label: "Cash" },
   { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cash", label: "Cash" },
   { value: "easypaisa", label: "Easypaisa" },
   { value: "jazzcash", label: "JazzCash" },
   { value: "card", label: "Card" },
   { value: "other", label: "Other" },
 ];
 
-const CATEGORIES = {
-  income: ["Salary", "Freelance", "Business Revenue", "Investment Returns", "Rental Income", "Other Income"],
-  expense: ["Software", "Transport", "Office Supplies", "Marketing", "Utilities", "Rent", "Meals", "Travel", "Equipment", "Other"],
-  student_fee: ["Tuition Fee", "Admission Fee", "Exam Fee", "Material Fee", "Other"],
-  client_payment: ["Milestone Payment", "Full Payment", "Advance", "Retainer", "Other"],
-  loan_received: ["Bank Loan", "Personal Loan", "Business Loan", "Family/Friends", "Other"],
-  loan_repayment: ["Principal Repayment", "Interest Payment", "Full Settlement", "Other"],
-  owner_payment: ["Profit Distribution", "Salary/Draw", "Reimbursement", "Other"],
-  other_income: ["Gift", "Refund", "Interest Earned", "Dividends", "Other"],
+const CATEGORY_SUGGESTIONS: Record<string, string[]> = {
+  income: ["Salary", "Freelance", "Consulting", "Dividends", "Rental Income", "General Income"],
+  expense: ["Software & Tools", "Office Rent", "Marketing & Ads", "Utilities", "Travel & Transport", "Hardware", "Office Supplies"],
+  product_sale: ["E-Commerce Sales", "Digital Product", "Physical Product", "Course Sales", "Shopify Store"],
+  ad_spend: ["Meta Ads", "Google Search Ads", "TikTok Ads", "Influencer Marketing", "YouTube Promotion"],
+  client_payment: ["Milestone Payment", "Advance Deposit", "Retainer Fee", "Project Delivery", "Hourly Billing"],
+  student_fee: ["Monthly Tuition", "Admission Fee", "Course Enrollment", "Exam Fee", "Lab Fee"],
+  owner_payment: ["Owner Draw", "Profit Distribution", "Partner Dividend", "Personal Withdrawal", "Reimbursement"],
+  loan_received: ["Bank Loan", "Friend & Family Loan", "Business Credit", "Working Capital Loan"],
+  loan_repayment: ["Principal Payment", "Monthly Installment", "Full Settlement"],
+  other_income: ["Gift", "Tax Refund", "Bank Interest", "Bonus"],
 };
 
-export function AddTransactionModal({ open, onClose }: AddTransactionModalProps) {
-  const { user } = useAuth();
-  const [type, setType] = useState<TransactionType>("income");
+export function AddTransactionModal({
+  open,
+  onClose,
+  defaultType = "income",
+}: AddTransactionModalProps) {
+  const { addTransaction, students, clients, loans, owners, customers, products, adCampaigns } = useFinancialData();
+
+  const [type, setType] = useState<TransactionType>(defaultType);
+  const [personName, setPersonName] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [category, setCategory] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [notes, setNotes] = useState("");
-  const [referenceId, setReferenceId] = useState("");
-  const [referenceType, setReferenceType] = useState("");
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [selectedRefId, setSelectedRefId] = useState<string>("");
+
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showMethodDropdown, setShowMethodDropdown] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
+
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState<{
+    personName?: string;
+    description?: string;
+    amount?: string;
+  }>({});
 
-  const currentTypeConfig = TRANSACTION_TYPES.find(t => t.value === type);
-  const currentCategories = type ? CATEGORIES[type as keyof typeof CATEGORIES] || [] : [];
-  const suggestions = currentCategories.filter(item =>
-    item.toLowerCase().includes(category.toLowerCase())
-  ).slice(0, 5);
+  useEffect(() => {
+    if (open) {
+      setType(defaultType);
+      setPersonName("");
+      setDescription("");
+      setAmount("");
+      setDate(new Date().toISOString().split("T")[0]);
+      setCategory("");
+      setPaymentMethod("bank_transfer");
+      setNotes("");
+      setSelectedRefId("");
+      setErrors({});
+      setShowTypeDropdown(false);
+      setShowMethodDropdown(false);
+      setShowCategoryDropdown(false);
 
-  const referenceError =
-    type === "student_fee"
-      ? "Select a student."
-      : type === "client_payment"
-      ? "Select a project."
-      : type === "loan_repayment"
-      ? "Select a loan."
-      : type === "owner_payment"
-      ? "Select an owner."
-      : "";
+      if (defaultType === "owner_payment" && owners.length > 0) {
+        setPersonName(owners[0].name || "Tayyab Afridi");
+        setDescription(`Owner Payment - ${owners[0].name || "Tayyab Afridi"}`);
+        setCategory("Owner Draw");
+      } else if (defaultType === "loan_received") {
+        setDescription("Loan Received");
+        setCategory("Bank Loan");
+      }
+    }
+  }, [open, defaultType, owners]);
 
-  const errors = {
-    description: touched.description && description.trim().length < 3 ? "Add at least 3 characters." : "",
-    amount: touched.amount && (!amount || Number(amount) <= 0) ? "Enter an amount greater than Rs. 0." : "",
-    category: touched.category && category.trim().length < 2 ? "Choose or enter a category." : "",
-    date: touched.date && !date ? "Choose a transaction date." : "",
-    referenceId:
-      touched.referenceId &&
-      ["student_fee", "client_payment", "loan_repayment", "owner_payment"].includes(type) &&
-      !referenceId
-        ? referenceError
-        : "",
+  const activeTypeConfig =
+    TRANSACTION_TYPES.find((t) => t.value === type) || TRANSACTION_TYPES[0];
+  const TypeIcon = activeTypeConfig.icon;
+
+  const currentCategories = CATEGORY_SUGGESTIONS[type] || CATEGORY_SUGGESTIONS.income;
+  const filteredCategories = currentCategories.filter((c) =>
+    c.toLowerCase().includes(categoryFilter.toLowerCase())
+  );
+
+  // Handle switching transaction type
+  const handleTypeSelect = (newType: TransactionType) => {
+    setType(newType);
+    setShowTypeDropdown(false);
+    setSelectedRefId("");
+
+    if (newType === "owner_payment") {
+      const defaultOwner = owners[0]?.name || "Tayyab Afridi";
+      setPersonName(defaultOwner);
+      setDescription(`Owner Payment - ${defaultOwner}`);
+      setCategory("Owner Draw");
+    } else if (newType === "loan_received") {
+      setPersonName("");
+      setDescription("Loan Received");
+      setCategory("Bank Loan");
+    } else if (newType === "loan_repayment") {
+      setPersonName("");
+      setDescription("Loan Repayment");
+      setCategory("Principal Payment");
+    } else if (newType === "product_sale") {
+      setPersonName("");
+      setDescription("Product Sale");
+      setCategory("E-Commerce Sales");
+    } else if (newType === "ad_spend") {
+      setPersonName("");
+      setDescription("Ad Campaign Spend");
+      setCategory("Marketing & Ads");
+    } else if (newType === "student_fee") {
+      setPersonName("");
+      setDescription("Student Fee");
+      setCategory("Monthly Tuition");
+    } else if (newType === "client_payment") {
+      setPersonName("");
+      setDescription("Client Payment");
+      setCategory("Milestone Payment");
+    } else if (newType === "income") {
+      setDescription("");
+      setCategory("General Income");
+    } else if (newType === "expense") {
+      setDescription("");
+      setCategory("Software & Tools");
+    }
+
+    setErrors({});
   };
 
-  const isValid = Object.values(errors).every(error => !error);
+  // Sync description automatically when person name changes
+  const handlePersonNameChange = (nameVal: string, refId?: string) => {
+    setPersonName(nameVal);
+    if (refId) setSelectedRefId(refId);
+    if (errors.personName) setErrors((prev) => ({ ...prev, personName: undefined }));
 
-  const handleSubmit = async () => {
-    const newTouched = {
-      description: true,
-      amount: true,
-      category: true,
-      date: true,
-      referenceId: ["student_fee", "client_payment", "loan_repayment", "owner_payment"].includes(type),
-    };
-    setTouched(newTouched);
+    const trimmed = nameVal.trim();
+    if (type === "owner_payment") {
+      setDescription(trimmed ? `Owner Payment - ${trimmed}` : "Owner Payment");
+    } else if (type === "loan_received") {
+      setDescription(trimmed ? `Loan received from ${trimmed}` : "Loan Received");
+    } else if (type === "loan_repayment") {
+      setDescription(trimmed ? `Loan Repayment - ${trimmed}` : "Loan Repayment");
+    } else if (type === "product_sale") {
+      setDescription(trimmed ? `Product Sale - ${trimmed}` : "Product Sale");
+    } else if (type === "ad_spend") {
+      setDescription(trimmed ? `Ad Spend - ${trimmed}` : "Ad Campaign Spend");
+    } else if (type === "student_fee") {
+      setDescription(trimmed ? `Student Fee - ${trimmed}` : "Student Fee");
+    } else if (type === "client_payment") {
+      setDescription(trimmed ? `Client Payment - ${trimmed}` : "Client Payment");
+    }
+  };
 
-    if (!isValid) return;
-    if (!user) {
-      toast.error("You must be logged in to add transactions");
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newErrors: { personName?: string; description?: string; amount?: string } = {};
+
+    if (activeTypeConfig.hasPersonField && !personName.trim()) {
+      newErrors.personName = `Please enter ${activeTypeConfig.personLabel?.toLowerCase() || "the name"}`;
+    }
+
+    if (!description.trim()) {
+      newErrors.description = "Please enter a description";
+    }
+
+    const numAmount = parseFloat(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
+      newErrors.amount = "Please enter a valid amount greater than 0";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
     setSaving(true);
     try {
-      // Get user's default workspace
-      const { data: workspaces } = await supabase
-        .from("workspaces")
-        .select("id")
-        .eq("owner_id", user.id)
-        .limit(1);
-      const workspaceId = workspaces?.[0]?.id || null;
-
-      const transactionData = {
-        user_id: user.id,
-        workspace_id: workspaceId,
-        type,
-        amount: Number(amount),
-        description: description.trim(),
-        category: category.trim() || null,
-        date,
-        payment_method: paymentMethod,
-        notes: notes.trim() || null,
-        reference_id: referenceId || null,
-        reference_type: referenceType || null,
-      };
-
-      const { data: transaction, error } = await supabase
-        .from("transactions")
-        .insert(transactionData)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Handle type-specific additional records
-      if (type === "student_fee" && referenceId) {
-        await supabase.from("student_payments").insert({
-          student_id: referenceId,
-          transaction_id: transaction.id,
-          amount: Number(amount),
-          date,
-          payment_method: paymentMethod,
-          notes: notes.trim() || null,
-        });
-        await supabase.rpc("increment_student_received", {
-          student_id: referenceId,
-          amount: Number(amount),
-        });
-      } else if (type === "client_payment" && referenceId) {
-        await supabase.from("project_payments").insert({
-          project_id: referenceId,
-          transaction_id: transaction.id,
-          amount: Number(amount),
-          date,
-          payment_method: paymentMethod,
-          notes: notes.trim() || null,
-        });
-        await supabase.rpc("increment_project_received", {
-          project_id: referenceId,
-          amount: Number(amount),
-        });
-      } else if (type === "loan_received" && referenceId) {
-        await supabase.from("loans").insert({
-          user_id: user.id,
-          workspace_id: workspaceId,
-          lender: description,
-          principal_amount: Number(amount),
-          remaining_amount: Number(amount),
-          due_date: date,
-          status: "active",
-          reason: notes.trim() || null,
-        });
-      } else if (type === "loan_repayment" && referenceId) {
-        await supabase.from("loan_payments").insert({
-          loan_id: referenceId,
-          transaction_id: transaction.id,
-          amount: Number(amount),
-          date,
-          payment_method: paymentMethod,
-          notes: notes.trim() || null,
-        });
-        const { data: loan } = await supabase
-          .from("loans")
-          .select("remaining_amount")
-          .eq("id", referenceId)
-          .single();
-        if (loan) {
-          const newRemaining = Math.max(0, loan.remaining_amount - Number(amount));
-          await supabase
-            .from("loans")
-            .update({
-              remaining_amount: newRemaining,
-              status: newRemaining === 0 ? "paid" : "active",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", referenceId);
+      let finalNotes = notes.trim();
+      if (personName.trim()) {
+        if (type === "loan_received") {
+          finalNotes = `Lender: ${personName.trim()}${finalNotes ? ` | ${finalNotes}` : ""}`;
+        } else if (type === "owner_payment") {
+          finalNotes = `Recipient: ${personName.trim()}${finalNotes ? ` | ${finalNotes}` : ""}`;
+        } else if (type === "product_sale") {
+          finalNotes = `Customer: ${personName.trim()}${finalNotes ? ` | ${finalNotes}` : ""}`;
+        } else if (type === "ad_spend") {
+          finalNotes = `Campaign: ${personName.trim()}${finalNotes ? ` | ${finalNotes}` : ""}`;
         }
-      } else if (type === "owner_payment" && referenceId) {
-        await supabase.from("owner_payments").insert({
-          owner_id: referenceId,
-          transaction_id: transaction.id,
-          amount: Number(amount),
-          date,
-          payment_method: paymentMethod,
-          notes: notes.trim() || null,
-        });
       }
 
-      setSaved(true);
-      toast.success("Transaction saved successfully");
-      setTimeout(() => {
-        setSaved(false);
-        setType("income");
-        setDescription("");
-        setAmount("");
-        setCategory("");
-        setDate(new Date().toISOString().split("T")[0]);
-        setPaymentMethod("bank_transfer");
-        setNotes("");
-        setReferenceId("");
-        setReferenceType("");
-        setTouched({});
-        onClose();
-      }, 1500);
-    } catch (error) {
-      console.error("Error saving transaction:", error);
-      toast.error("Failed to save transaction. Please try again.");
+      addTransaction({
+        type,
+        amount: numAmount,
+        description: description.trim(),
+        category: category.trim() || undefined,
+        date,
+        payment_method: paymentMethod,
+        notes: finalNotes || undefined,
+        reference_id: selectedRefId || undefined,
+        reference_type:
+          type === "student_fee"
+            ? "student"
+            : type === "client_payment"
+            ? "client"
+            : type === "loan_repayment" || type === "loan_received"
+            ? "loan"
+            : type === "owner_payment"
+            ? "owner_payment"
+            : type === "product_sale"
+            ? "product"
+            : type === "ad_spend"
+            ? "ad_campaign"
+            : undefined,
+      });
+
+      onClose();
     } finally {
       setSaving(false);
     }
   };
 
-  const handleClose = () => {
-    if (!saved && !saving) {
-      setSaved(false);
-      setType("income");
-      setDescription("");
-      setAmount("");
-      setCategory("");
-      setDate(new Date().toISOString().split("T")[0]);
-      setPaymentMethod("bank_transfer");
-      setNotes("");
-      setReferenceId("");
-      setReferenceType("");
-      setTouched({});
-      onClose();
-    }
-  };
-
-  if (saved) {
-    return (
-      <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="max-w-md">
-          <div className="text-center py-8">
-            <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle2 size={32} className="text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Transaction Saved</h3>
-            <p className="text-gray-500 mt-1">Your transaction has been recorded successfully.</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  const showReferenceField = ["student_fee", "client_payment", "loan_repayment", "owner_payment"].includes(type);
-
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
-        <DialogHeader className="pb-4">
-          <DialogTitle className="text-xl">Add Transaction</DialogTitle>
-          <DialogDescription>Capture a movement once. FinTrack will keep the rest of the workspace aligned.</DialogDescription>
-        </DialogHeader>
-        <div className="px-6 pb-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                placeholder="e.g. Client milestone payment"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onBlur={() => setTouched(t => ({ ...t, description: true }))}
-                aria-invalid={!!(touched.description && errors.description)}
-                className="mt-1"
-              />
-              {touched.description && errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
-            </div>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="p-0 max-w-lg bg-white border border-[#e2e8f0] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+        <DialogTitle className="sr-only">Add Transaction</DialogTitle>
 
-            <div>
-              <Label htmlFor="amount">Amount (Rs.)</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                onBlur={() => setTouched(t => ({ ...t, amount: true }))}
-                aria-invalid={!!(touched.amount && errors.amount)}
-                className="mt-1"
-              />
-              {touched.amount && errors.amount && <p className="text-sm text-destructive mt-1">{errors.amount}</p>}
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-[#f1f5f9] mb-5">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTypeConfig.direction === "in"
+                    ? "bg-[#eff6ff] text-[#2563eb]"
+                    : "bg-[#fff7ed] text-[#ea580c]"
+                }`}
+              >
+                <TypeIcon size={20} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#0f172a] leading-snug">
+                  Add Transaction
+                </h2>
+                <p className="text-xs text-[#64748b]">
+                  {activeTypeConfig.direction === "in"
+                    ? "Record income, sales, fee or loan received"
+                    : "Record business expense, ad spend or withdrawal"}
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-[#94a3b8] hover:text-[#475569] hover:bg-[#f1f5f9] p-1.5 rounded-lg transition"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
-            <div>
-              <Label htmlFor="type">Transaction Type</Label>
-              <Select value={type} onValueChange={setType}>
-                <SelectTrigger id="type" className="mt-1">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSACTION_TYPES.map(t => (
-                    <SelectItem key={t.value} value={t.value}>
-                      <div className="flex items-center gap-2">
-                        <t.icon size={14} className="text-primary" />
-                        <span>{t.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Row 1: Transaction Type & Date */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Type dropdown */}
+              <div className="space-y-1.5 relative">
+                <Label className="text-xs font-semibold text-[#1e293b]">Transaction Type</Label>
+                <button
+                  type="button"
+                  onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                  className="w-full h-11 px-3.5 bg-white border border-[#e2e8f0] rounded-xl flex items-center justify-between text-xs text-[#0f172a] hover:border-[#cbd5e1] focus:outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <TypeIcon
+                      size={15}
+                      className={activeTypeConfig.direction === "in" ? "text-[#2563eb]" : "text-[#ea580c]"}
+                    />
+                    <span className="font-medium">{activeTypeConfig.label}</span>
+                  </div>
+                  <ChevronDown size={14} className="text-[#94a3b8] shrink-0" />
+                </button>
 
-            <div>
-              <Label htmlFor="date">Date</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                onBlur={() => setTouched(t => ({ ...t, date: true }))}
-                aria-invalid={!!(touched.date && errors.date)}
-                className="mt-1"
-              />
-              {touched.date && errors.date && <p className="text-sm text-destructive mt-1">{errors.date}</p>}
-            </div>
+                {showTypeDropdown && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setShowTypeDropdown(false)}
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-40 py-1.5 max-h-64 overflow-y-auto">
+                      {TRANSACTION_TYPES.map((t) => {
+                        const Icon = t.icon;
+                        const isSelected = t.value === type;
+                        return (
+                          <button
+                            key={t.value}
+                            type="button"
+                            onClick={() => handleTypeSelect(t.value)}
+                            className={`w-full px-3.5 py-2.5 flex items-center justify-between text-xs text-left transition ${
+                              isSelected ? "bg-[#eff6ff] text-[#2563eb] font-semibold" : "text-[#334155] hover:bg-[#f8fafc]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                                  t.direction === "in" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
+                                }`}
+                              >
+                                <Icon size={13} />
+                              </div>
+                              <div>
+                                <span className="font-medium text-xs text-[#0f172a] block">{t.label}</span>
+                                <span className="text-[10px] text-[#94a3b8] block">
+                                  {t.direction === "in" ? "Money In / Inflow" : "Money Out / Outflow"}
+                                </span>
+                              </div>
+                            </div>
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-[#2563eb]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="category">Category</Label>
-              <div className="relative mt-1">
-                <Input
-                  id="category"
-                  placeholder="Search or select category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  onFocus={() => setTouched(t => ({ ...t, category: true }))}
-                  onBlur={() => setTouched(t => ({ ...t, category: true }))}
-                  aria-invalid={!!(touched.category && errors.category)}
-                  list="category-suggestions"
-                />
-                <datalist id="category-suggestions">
-                  {currentCategories.map(cat => <option key={cat} value={cat} />)}
-                </datalist>
-                {touched.category && errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
+              {/* Date Input */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-[#1e293b]">Date</Label>
+                <div className="relative">
+                  <Input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="h-11 rounded-xl bg-white border border-[#e2e8f0] text-xs text-[#0f172a] pr-10 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition"
+                  />
+                  <Calendar
+                    size={15}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] pointer-events-none"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="paymentMethod">Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger id="paymentMethod" className="mt-1">
-                  <SelectValue placeholder="Select method" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map(pm => (
-                    <SelectItem key={pm.value} value={pm.value}>
-                      {pm.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Row 2: Dedicated Name Input (When applicable: Loan Received, Owner Payment, Repayment, Fee, Client, Product Sale, Ad Spend) */}
+            {activeTypeConfig.hasPersonField && (
+              <div className="p-3.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-[#0f172a] flex items-center gap-1.5">
+                    <User size={14} className="text-[#2563eb]" />
+                    {activeTypeConfig.personLabel}
+                    <span className="text-red-500 font-bold">*</span>
+                  </Label>
+                  <span className="text-[10px] text-[#94a3b8]">Required</span>
+                </div>
 
-            {showReferenceField && (
-              <div className="md:col-span-2">
-                <Label htmlFor="referenceId">
-                  {type === "student_fee" ? "Student" :
-                   type === "client_payment" ? "Project" :
-                   type === "loan_repayment" ? "Loan" : "Owner"}
-                </Label>
-                <Select value={referenceId} onValueChange={setReferenceId}>
-                  <SelectTrigger id="referenceId" className="mt-1">
-                    <SelectValue placeholder={type === "student_fee" ? "Select student" : type === "client_payment" ? "Select project" : type === "loan_repayment" ? "Select loan" : "Select owner"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {type === "student_fee" && (
-                      <>
-                        <SelectItem value="">-- Select Student --</SelectItem>
-                      </>
-                    )}
-                    {type === "client_payment" && (
-                      <>
-                        <SelectItem value="">-- Select Project --</SelectItem>
-                      </>
-                    )}
-                    {type === "loan_repayment" && (
-                      <>
-                        <SelectItem value="">-- Select Loan --</SelectItem>
-                      </>
-                    )}
-                    {type === "owner_payment" && (
-                      <>
-                        <SelectItem value="">-- Select Owner --</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                {touched.referenceId && errors.referenceId && <p className="text-sm text-destructive mt-1">{errors.referenceId}</p>}
+                <Input
+                  value={personName}
+                  onChange={(e) => handlePersonNameChange(e.target.value)}
+                  placeholder={activeTypeConfig.personPlaceholder}
+                  autoFocus
+                  className={`h-11 rounded-xl bg-white border text-xs text-[#0f172a] placeholder:text-[#94a3b8] transition ${
+                    errors.personName
+                      ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      : "border-[#cbd5e1] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+                  }`}
+                />
+
+                <p className="text-[11px] text-[#64748b]">
+                  {activeTypeConfig.personSubtitle}
+                </p>
+
+                {errors.personName && (
+                  <span className="text-[11px] text-red-500 font-medium block">
+                    {errors.personName}
+                  </span>
+                )}
+
+                {/* Quick Selection Shortcuts for Known Entities */}
+                {type === "owner_payment" && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
+                    <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Quick Select:</span>
+                    {owners.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => handlePersonNameChange(o.name)}
+                        className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                          personName === o.name
+                            ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                            : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {o.name}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handlePersonNameChange("Tayyab Afridi")}
+                      className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                        personName === "Tayyab Afridi"
+                          ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                          : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                      }`}
+                    >
+                      Tayyab Afridi
+                    </button>
+                  </div>
+                )}
+
+                {type === "loan_received" && loans.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
+                    <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Existing Lenders:</span>
+                    {Array.from(new Set(loans.map((l) => l.lender))).map((lender) => (
+                      <button
+                        key={lender}
+                        type="button"
+                        onClick={() => handlePersonNameChange(lender)}
+                        className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                          personName === lender
+                            ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                            : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {lender}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {type === "product_sale" && customers.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
+                    <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Recent Customers:</span>
+                    {customers.slice(0, 4).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handlePersonNameChange(c.name, c.id)}
+                        className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                          personName === c.name
+                            ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                            : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {type === "ad_spend" && adCampaigns.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
+                    <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Active Campaigns:</span>
+                    {adCampaigns.slice(0, 3).map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => handlePersonNameChange(a.name, a.id)}
+                        className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                          personName === a.name
+                            ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                            : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {a.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {type === "student_fee" && students.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
+                    <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Students:</span>
+                    {students.slice(0, 4).map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handlePersonNameChange(s.name, s.id)}
+                        className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                          personName === s.name
+                            ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                            : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {type === "client_payment" && clients.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
+                    <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Clients:</span>
+                    {clients.slice(0, 4).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handlePersonNameChange(c.name, c.id)}
+                        className={`px-2 py-0.5 text-[11px] font-medium rounded-lg border transition ${
+                          personName === c.name
+                            ? "bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]"
+                            : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f1f5f9]"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            <div className="md:col-span-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
+            {/* Row 3: Description & Amount */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-[#1e293b]">Description</Label>
+                <Input
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    if (errors.description) setErrors((prev) => ({ ...prev, description: undefined }));
+                  }}
+                  placeholder="e.g. Monthly salary, SaaS tool subscription"
+                  className={`h-11 rounded-xl bg-white border text-xs text-[#0f172a] placeholder:text-[#94a3b8] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition ${
+                    errors.description ? "border-red-400" : "border-[#e2e8f0]"
+                  }`}
+                />
+                {errors.description && (
+                  <span className="text-[11px] text-red-500 font-medium">{errors.description}</span>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-[#1e293b]">Amount (PKR / Rs.)</Label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748b]">
+                    Rs.
+                  </span>
+                  <Input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => {
+                      setAmount(e.target.value);
+                      if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
+                    }}
+                    placeholder="0.00"
+                    className={`h-11 rounded-xl bg-white border text-xs font-semibold text-[#0f172a] pl-10 pr-3.5 placeholder:text-[#94a3b8] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition ${
+                      errors.amount ? "border-red-400" : "border-[#e2e8f0]"
+                    }`}
+                  />
+                </div>
+                {errors.amount && (
+                  <span className="text-[11px] text-red-500 font-medium">{errors.amount}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Row 4: Category & Payment Method */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Category selector */}
+              <div className="space-y-1.5 relative">
+                <Label className="text-xs font-semibold text-[#1e293b]">Category</Label>
+                <div className="relative">
+                  <Input
+                    value={category}
+                    onChange={(e) => {
+                      setCategory(e.target.value);
+                      setCategoryFilter(e.target.value);
+                    }}
+                    onFocus={() => setShowCategoryDropdown(true)}
+                    placeholder="Select or type category..."
+                    className="h-11 rounded-xl bg-white border border-[#e2e8f0] text-xs text-[#0f172a] pr-8 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#475569] p-1"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+
+                {showCategoryDropdown && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setShowCategoryDropdown(false)}
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-40 p-1.5 max-h-48 overflow-y-auto">
+                      <div className="text-[10px] font-semibold text-[#94a3b8] px-2 py-1 uppercase tracking-wider">
+                        Suggested Categories
+                      </div>
+                      {filteredCategories.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            setCategory(c);
+                            setShowCategoryDropdown(false);
+                          }}
+                          className={`w-full px-2.5 py-1.5 text-xs text-left rounded-lg transition ${
+                            category === c ? "bg-[#eff6ff] text-[#2563eb] font-semibold" : "text-[#334155] hover:bg-[#f8fafc]"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Payment Method selector */}
+              <div className="space-y-1.5 relative">
+                <Label className="text-xs font-semibold text-[#1e293b]">Payment Method</Label>
+                <button
+                  type="button"
+                  onClick={() => setShowMethodDropdown(!showMethodDropdown)}
+                  className="w-full h-11 px-3.5 bg-white border border-[#e2e8f0] rounded-xl flex items-center justify-between text-xs text-[#0f172a] hover:border-[#cbd5e1] focus:outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition"
+                >
+                  <span className="font-medium capitalize">
+                    {PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label || paymentMethod}
+                  </span>
+                  <ChevronDown size={14} className="text-[#94a3b8]" />
+                </button>
+
+                {showMethodDropdown && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setShowMethodDropdown(false)}
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-40 py-1.5 max-h-48 overflow-y-auto">
+                      {PAYMENT_METHODS.map((m) => (
+                        <button
+                          key={m.value}
+                          type="button"
+                          onClick={() => {
+                            setPaymentMethod(m.value);
+                            setShowMethodDropdown(false);
+                          }}
+                          className={`w-full px-3.5 py-2 text-xs text-left transition ${
+                            paymentMethod === m.value
+                              ? "bg-[#eff6ff] text-[#2563eb] font-semibold"
+                              : "text-[#334155] hover:bg-[#f8fafc]"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Row 5: Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-[#1e293b]">
+                Additional Notes <span className="text-[#94a3b8] font-normal">(Optional)</span>
+              </Label>
               <Input
-                id="notes"
-                type="text"
-                placeholder="Additional notes..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="mt-1"
+                placeholder="Invoice number, payment reference, tracking ID..."
+                className="h-10 rounded-xl bg-white border border-[#e2e8f0] text-xs text-[#0f172a] placeholder:text-[#94a3b8] focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 transition"
               />
             </div>
-          </div>
 
-          <DialogFooter className="pt-4 border-t">
-            <Button variant="ghost" onClick={handleClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit} disabled={saving} className="primary-btn">
-              {saving ? "Saving..." : <><CheckCircle2 size={16} className="mr-2" /> Save Transaction</>}
-            </Button>
-          </DialogFooter>
+            {/* Form Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#f1f5f9]">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                className="h-11 px-5 rounded-xl border-[#e2e8f0] text-xs font-medium text-[#475569] hover:bg-[#f8fafc]"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving}
+                className="h-11 px-6 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-sm transition"
+              >
+                {saving ? "Saving..." : "Save Transaction"}
+              </Button>
+            </div>
+          </form>
         </div>
       </DialogContent>
     </Dialog>
